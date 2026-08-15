@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="潮見帳">
+<meta name="theme-color" content="#0c2430">
+<title>潮見帳 — クロダイ釣行記録</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg: #0c2430;
+    --surface: #123240;
+    --surface-2: #17404f;
+    --line: rgba(237,230,214,0.12);
+    --ink: #ede6d6;
+    --ink-dim: #9fb3b9;
+    --bronze: #b08650;
+    --bronze-bright: #d1a469;
+    --teal: #3e9c8c;
+    --rust: #a85c42;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: radial-gradient(1200px 800px at 80% -10%, #123544 0%, var(--bg) 55%);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
+    min-height:100vh;
+    padding-bottom: 84px;
+  }
+  h1,h2,h3, .display{
+    font-family: "Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  header.top{
+    padding: 16px 18px 12px;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+  }
+  header.top svg.wave{ position:absolute; left:0; right:0; bottom:-2px; width:100%; height:28px; opacity:0.5; }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand .kanji{ font-size: 22px; color: var(--bronze-bright); }
+  .brand .sub{ font-size: 10px; color: var(--ink-dim); letter-spacing:0.15em; }
+
+  main{ max-width: 720px; margin: 0 auto; padding: 0; }
+  .panel{ display:none; }
+  .panel.active{ display:block; animation: fade .25s ease; }
+  @keyframes fade{ from{opacity:0; transform: translateY(4px);} to{opacity:1; transform:none;} }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 14px 14px 0;
+  }
+  .card:last-child{ margin-bottom:14px; }
+  .card h3{ margin: 0 0 12px; font-size: 14px; color: var(--bronze-bright); }
+
+  label{ display:block; font-size: 12px; color: var(--ink-dim); margin: 10px 0 4px; }
+  input[type=text], input[type=number], input[type=date], input[type=time], select, textarea{
+    width:100%; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 9px 10px; font-size: 14px; font-family: inherit;
+  }
+  textarea{ min-height: 56px; resize: vertical; }
+  .row2{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .checkline{ display:flex; align-items:center; gap:8px; margin-top:12px; }
+  .checkline input{ width:auto; }
+
+  button{ font-family: inherit; cursor:pointer; border:none; border-radius: 9px; padding: 10px 16px; font-size: 14px; font-weight:600; }
+  .btn-primary{ background: var(--bronze); color: #1a1108; }
+  .btn-ghost{ background: transparent; color: var(--ink-dim); border:1px solid var(--line); }
+  .btn-danger{ background: transparent; color: var(--rust); border:1px solid var(--rust); }
+  .btn-row{ display:flex; gap:10px; margin-top:14px; }
+
+  .tideBadge{ display:inline-flex; align-items:center; gap:6px; background: var(--surface-2); border:1px solid var(--line);
+    border-radius: 20px; padding: 6px 12px; font-size: 13px; color: var(--teal); }
+  .moon{ width:12px; height:12px; border-radius:50%; background:#e8e0cc; display:inline-block; }
+
+  nav.tabs{ position:fixed; bottom:0; left:0; right:0; background: rgba(12,36,48,0.96); backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line); display:flex; z-index: 500; }
+  nav.tabs button{ flex:1; background:none; border-radius:0; color: var(--ink-dim); padding: 12px 4px 10px; font-size:11px;
+    display:flex; flex-direction:column; align-items:center; gap:4px; }
+  nav.tabs button.active{ color: var(--bronze-bright); }
+  nav.tabs .ic{ font-size:18px; }
+
+  #mainMap{ height: 46vh; min-height:280px; }
+  .mapCard{ padding:0; overflow:hidden; margin-top:0; }
+
+  .recordItem{ border-bottom:1px solid var(--line); padding: 11px 0; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .recordItem:last-child{ border-bottom:none; }
+  .recordItem .meta{ font-size:12px; color:var(--ink-dim); margin-top:2px; }
+  .pill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; margin-right:6px; margin-top:4px; }
+  .pill.catch{ background: rgba(62,156,140,0.18); color: var(--teal); }
+  .pill.bouzu{ background: rgba(168,92,66,0.18); color: var(--rust); }
+  .iconbtn{ background:none; color:var(--ink-dim); padding:4px 8px; font-size:12px; }
+
+  .empty{ text-align:center; color: var(--ink-dim); padding: 24px 10px; font-size:13px; }
+
+  .barRow{ margin-bottom:10px; }
+  .barRow .lbl{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-dim); margin-bottom:3px; }
+  .barTrack{ background: var(--surface-2); border-radius:6px; height:10px; overflow:hidden; }
+  .barFill{ height:100%; background: linear-gradient(90deg, var(--bronze), var(--teal)); border-radius:6px; }
+
+  table.cross{ width:100%; border-collapse: collapse; font-size:12px; }
+  table.cross th, table.cross td{ border:1px solid var(--line); padding:6px 5px; text-align:center; }
+  table.cross th{ color: var(--bronze-bright); font-weight:600; background: var(--surface-2); }
+
+  dialog{ border:none; border-radius:14px; background: var(--surface); color:var(--ink); padding:18px; width: min(90vw, 360px); }
+  dialog::backdrop{ background: rgba(0,0,0,0.55); }
+  .hint{ font-size:11px; color: var(--ink-dim); margin-top:6px; line-height:1.5; }
+
+  .popupBtn{ display:inline-block; margin-top:6px; background:var(--bronze); color:#1a1108; border-radius:6px; padding:4px 8px; font-size:12px; text-decoration:none; cursor:pointer; }
+  .leaflet-popup-content-wrapper{ background: var(--surface); color: var(--ink); border-radius:10px; }
+  .leaflet-popup-tip{ background: var(--surface); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="kanji display">潮見帳</span>
+    <span class="sub">KURODAI FIELD LOG</span>
+  </div>
+  <svg class="wave" viewBox="0 0 400 30" preserveAspectRatio="none">
+    <path d="M0 15 Q 20 0 40 15 T 80 15 T 120 15 T 160 15 T 200 15 T 240 15 T 280 15 T 320 15 T 360 15 T 400 15"
+      fill="none" stroke="#3e9c8c" stroke-width="1.4"/>
+  </svg>
+</header>
+<div id="previewBanner" style="display:none; background:#17404f; color:#9fb3b9; font-size:11px; text-align:center; padding:6px 12px; border-bottom:1px solid rgba(237,230,214,0.12);">
+  プレビュー中です。確実に保存するにはホーム画面に追加してご利用ください。
+</div>
+
+<main>
+
+  <!-- マップ（ホーム） -->
+  <section class="panel active" id="panel-map">
+    <div class="card mapCard"><div id="mainMap"></div></div>
+    <div class="hint" style="margin:8px 14px 0;">地図をタップ → 新しい場所を登録／ピンをタップ → その場所の記録を見る</div>
+
+    <div class="card" id="quickAddLoc" style="display:none;">
+      <h3>新しい場所を登録</h3>
+      <label>場所名</label>
+      <input type="text" id="newLocName" placeholder="例: 〇〇漁港 北側堤防">
+      <label>向き（方角・任意）</label>
+      <select id="newLocDir">
+        <option value="">選択…</option>
+        <option>北</option><option>北東</option><option>東</option><option>南東</option>
+        <option>南</option><option>南西</option><option>西</option><option>北西</option>
+      </select>
+      <div class="btn-row">
+        <button class="btn-primary" id="btnSaveLoc" style="flex:1;">登録する</button>
+        <button class="btn-ghost" id="btnCancelLoc">取消</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>最近の釣行</h3>
+      <select id="filterLocation" style="margin-bottom:10px;"><option value="">場所で絞り込み: すべて</option></select>
+      <div id="recordList"></div>
+    </div>
+  </section>
+
+  <!-- 記録 -->
+  <section class="panel" id="panel-record">
+    <div class="card">
+      <h3>釣行記録</h3>
+      <div class="row2">
+        <div><label>日付</label><input type="date" id="f-date"></div>
+        <div><label>時刻</label><input type="time" id="f-time"></div>
+      </div>
+
+      <label>場所</label>
+      <select id="f-location"><option value="">場所を選択…（マップをタップして追加）</option></select>
+
+      <div id="tideAuto" style="margin-top:10px;"></div>
+
+      <div class="checkline">
+        <input type="checkbox" id="f-bouzu">
+        <label style="margin:0;" for="f-bouzu">ボウズ（釣れなかった）</label>
+      </div>
+
+      <div class="row2">
+        <div><label>尾数</label><input type="number" id="f-count" min="0" placeholder="例: 2"></div>
+        <div><label>最大サイズ (cm)</label><input type="number" id="f-size" min="0" step="0.5" placeholder="例: 38"></div>
+      </div>
+
+      <label>潮の動き</label>
+      <select id="f-tidemove">
+        <option value="">選択…</option>
+        <option>上げ潮</option><option>下げ潮</option><option>満潮止まり</option><option>干潮止まり</option>
+      </select>
+
+      <div class="row2">
+        <div><label>天気</label>
+          <select id="f-weather"><option value="">選択…</option><option>快晴</option><option>晴れ</option><option>曇り</option><option>雨</option><option>雪</option></select>
+        </div>
+        <div><label>気温 (℃)</label><input type="number" id="f-airtemp" step="0.5"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>水温 (℃)</label><input type="number" id="f-watertemp" step="0.5"></div>
+        <div><label>降水量・直近1日 (mm)</label><input type="number" id="f-rain" step="0.5" min="0"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>風向き</label>
+          <select id="f-winddir"><option value="">選択…</option><option>北</option><option>北東</option><option>東</option><option>南東</option><option>南</option><option>南西</option><option>西</option><option>北西</option></select>
+        </div>
+        <div><label>風力 (m/s目安)</label><input type="number" id="f-windforce" min="0" step="0.5"></div>
+      </div>
+
+      <label>溶存酸素濃度 (mg/L・任意)</label>
+      <input type="number" id="f-oxygen" step="0.1" min="0">
+      <div class="hint">※溶存酸素は自動取得できるAPIが乏しいため手入力です。</div>
+
+      <label>メモ</label>
+      <textarea id="f-memo" placeholder="潮の匂い、他の釣り人の様子、ルアー/エサなど"></textarea>
+
+      <div class="btn-row">
+        <button class="btn-primary" id="btnSaveRecord" style="flex:1;">記録を保存</button>
+        <button class="btn-ghost" id="btnCancelEdit" style="display:none;">キャンセル</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 分析 -->
+  <section class="panel" id="panel-analysis">
+    <div class="card">
+      <h3>条件別 釣果集計</h3>
+      <label>集計の軸</label>
+      <select id="analysisAxis">
+        <option value="tide">潮回り</option>
+        <option value="tidemove">潮の動き</option>
+        <option value="location">場所</option>
+        <option value="winddir">風向き</option>
+        <option value="weather">天気</option>
+        <option value="hour">時間帯</option>
+        <option value="watertemp">水温帯</option>
+        <option value="rain">降水量帯</option>
+      </select>
+      <div id="analysisResult" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
+      <h3>クロス集計</h3>
+      <div class="row2">
+        <select id="crossAxis1">
+          <option value="tide">潮回り</option><option value="tidemove">潮の動き</option>
+          <option value="location">場所</option><option value="winddir">風向き</option>
+        </select>
+        <select id="crossAxis2">
+          <option value="location">場所</option><option value="tide">潮回り</option>
+          <option value="tidemove">潮の動き</option><option value="winddir">風向き</option>
+        </select>
+      </div>
+      <div id="crossResult" style="margin-top:12px; overflow-x:auto;"></div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button data-tab="map" class="active"><span class="ic">📍</span>マップ</button>
+  <button data-tab="record"><span class="ic">✎</span>記録</button>
+  <button data-tab="analysis"><span class="ic">📊</span>分析</button>
+</nav>
+
+<dialog id="detailDialog">
+  <div id="detailBody"></div>
+  <div class="btn-row">
+    <button class="btn-ghost" id="detailEdit">編集</button>
+    <button class="btn-danger" id="detailDelete">削除</button>
+    <button class="btn-ghost" id="detailClose">閉じる</button>
+  </div>
+</dialog>
+
+<script>
+/* ---------- ストレージ ----------
+   Claude内で開いている時は window.storage（アカウント同期）を使い、
+   単独のホーム画面アプリとして開いた時は localStorage（端末内保存）を使う。
+   両対応なので、Claudeでもホーム画面アプリでも同じコードで動く。 */
+function showToast(msg, tone){
+  let t = document.getElementById('__toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = '__toast';
+    t.style.cssText = 'position:fixed; left:50%; bottom:76px; transform:translateX(-50%); z-index:900; padding:10px 16px; border-radius:20px; font-size:12px; max-width:88vw; text-align:center; box-shadow:0 4px 14px rgba(0,0,0,0.35); transition:opacity .3s;';
+    document.body.appendChild(t);
+  }
+  t.style.background = tone==='error' ? '#a85c42' : (tone==='warn' ? '#b08650' : '#3e9c8c');
+  t.style.color = '#1a1108';
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t.__timer);
+  t.__timer = setTimeout(()=>{ t.style.opacity='0'; }, 3200);
+}
+
+const LOCAL_PREFIX = 'kurodai:';
+function hasRemoteStorage(){
+  return !!(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function');
+}
+
+async function loadAll(key){
+  if(hasRemoteStorage()){
+    try{
+      const r = await window.storage.get(key, false);
+      if(r) return JSON.parse(r.value);
+      return [];
+    }catch(e){
+      console.warn('remote load failed', e && e.message);
+      return [];
+    }
+  }
+  try{
+    const v = localStorage.getItem(LOCAL_PREFIX+key);
+    return v ? JSON.parse(v) : [];
+  }catch(e){ return []; }
+}
+
+async function saveAll(key, arr, attempt){
+  attempt = attempt || 1;
+
+  if(!hasRemoteStorage()){
+    // 単独アプリ（ホーム画面から起動）として動作中：端末内保存のみでOK
+    try{
+      localStorage.setItem(LOCAL_PREFIX+key, JSON.stringify(arr));
+      return true;
+    }catch(e){
+      console.error('local storage failed', e);
+      showToast('端末への保存に失敗しました', 'error');
+      return false;
+    }
+  }
+
+  // Claude内プレビューとして動作中：window.storageのみ使用（ブラウザストレージは使わない）
+  try{
+    const result = await window.storage.set(key, JSON.stringify(arr), false);
+    if(!result) throw new Error('empty response');
+    return true;
+  }catch(e){
+    console.error('remote storage set error (attempt '+attempt+')', e);
+    if(attempt < 3){
+      await new Promise(res=>setTimeout(res, 500*attempt));
+      return saveAll(key, arr, attempt+1);
+    }
+    showToast('プレビュー画面の保存が不安定です。ホーム画面に追加した実機版なら確実に保存されます', 'warn');
+    return false;
+  }
+}
+
+let locations = [];
+let records = [];
+
+/* ---------- 潮回り計算（月齢ベース、簡易近似） ---------- */
+function moonAge(date){
+  const known = Date.UTC(2000,0,6,18,14,0);
+  const synodic = 29.530588853;
+  const diffDays = (date.getTime() - known) / 86400000;
+  let age = diffDays % synodic;
+  if(age < 0) age += synodic;
+  return age;
+}
+function tideName(date){
+  const a = Math.round(moonAge(date)) % 30;
+  if([0,1,2,15,16,17].includes(a)) return '大潮';
+  if([3,4,18,19].includes(a)) return '中潮';
+  if([5,6,7,20,21,22].includes(a)) return '小潮';
+  if([8,23].includes(a)) return '長潮';
+  if([9,24].includes(a)) return '若潮';
+  return '中潮';
+}
+
+/* ---------- タブ切替 ---------- */
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    tabs.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='map'){ setTimeout(()=>map.invalidateSize(), 50); }
+  });
+});
+function goToTab(name){ document.querySelector(`nav.tabs button[data-tab="${name}"]`).click(); }
+
+/* ---------- マップ ---------- */
+const map = L.map('mainMap').setView([35.0, 135.0], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+navigator.geolocation && navigator.geolocation.getCurrentPosition(
+  pos=>{ map.setView([pos.coords.latitude, pos.coords.longitude], 12); }, ()=>{}, {timeout:3000}
+);
+
+let pendingLatLng = null;
+let pendingMarker = null;
+map.on('click', e=>{
+  pendingLatLng = e.latlng;
+  if(pendingMarker) map.removeLayer(pendingMarker);
+  pendingMarker = L.marker(e.latlng).addTo(map);
+  document.getElementById('quickAddLoc').style.display = 'block';
+  document.getElementById('quickAddLoc').scrollIntoView({behavior:'smooth', block:'center'});
+});
+document.getElementById('btnCancelLoc').addEventListener('click', ()=>{
+  document.getElementById('quickAddLoc').style.display='none';
+  if(pendingMarker) map.removeLayer(pendingMarker);
+  pendingMarker = null; pendingLatLng = null;
+  document.getElementById('newLocName').value=''; document.getElementById('newLocDir').value='';
+});
+document.getElementById('btnSaveLoc').addEventListener('click', async ()=>{
+  const name = document.getElementById('newLocName').value.trim();
+  if(!name || !pendingLatLng){ alert('場所名を入力してください'); return; }
+  const btn = document.getElementById('btnSaveLoc');
+  btn.disabled = true; btn.textContent = '登録中…';
+  locations.push({ id: crypto.randomUUID(), name, lat: pendingLatLng.lat, lng: pendingLatLng.lng, dir: document.getElementById('newLocDir').value });
+  const ok = await saveAll('locations', locations);
+  btn.disabled = false; btn.textContent = '登録する';
+  if(ok) showToast(name + ' を登録しました');
+  document.getElementById('btnCancelLoc').click();
+  populateLocationSelects();
+  renderMapMarkers();
+});
+
+let locMarkers = [];
+function statsFor(locId){
+  const rs = records.filter(r=>r.locationId===locId);
+  const total = rs.length;
+  const caught = rs.filter(r=>!r.bouzu).length;
+  const fish = rs.reduce((s,r)=> s + (r.bouzu?0:(r.count||0)), 0);
+  return {total, caught, fish};
+}
+function renderMapMarkers(){
+  locMarkers.forEach(m=>map.removeLayer(m));
+  locMarkers = [];
+  locations.forEach(loc=>{
+    const s = statsFor(loc.id);
+    const color = s.fish>0 ? '#3e9c8c' : (s.total>0 ? '#a85c42' : '#b08650');
+    const marker = L.circleMarker([loc.lat, loc.lng], {radius:9, color, fillColor:color, fillOpacity:0.9, weight:2});
+    const popupHtml = `
+      <div style="font-size:13px; min-width:160px;">
+        <strong>${loc.name}</strong>${loc.dir? ' ／ '+loc.dir+'向き':''}<br>
+        釣行 ${s.total}回・釣果 ${s.fish}尾<br>
+        <span class="popupBtn" onclick="window.__recAt('${loc.id}')">ここで記録する</span>
+        <span class="popupBtn" style="background:transparent; color:#a85c42; border:1px solid #a85c42;" onclick="window.__delLoc('${loc.id}')">削除</span>
+      </div>`;
+    marker.bindPopup(popupHtml);
+    marker.addTo(map);
+    locMarkers.push(marker);
+  });
+}
+window.__recAt = (locId)=>{
+  document.getElementById('f-location').value = locId;
+  map.closePopup();
+  goToTab('record');
+};
+window.__delLoc = async (locId)=>{
+  const loc = locations.find(l=>l.id===locId);
+  if(!loc) return;
+  if(!confirm(loc.name+' を削除しますか？（紐づく記録は残ります）')) return;
+  locations = locations.filter(l=>l.id!==locId);
+  await saveAll('locations', locations);
+  map.closePopup();
+  populateLocationSelects();
+  renderMapMarkers();
+};
+
+function populateLocationSelects(){
+  [document.getElementById('f-location'), document.getElementById('filterLocation')].forEach(sel=>{
+    const keep = sel.value;
+    const isFilter = sel.id==='filterLocation';
+    sel.innerHTML = isFilter ? '<option value="">場所で絞り込み: すべて</option>' : '<option value="">場所を選択…（マップをタップして追加）</option>';
+    locations.forEach(loc=>{
+      const opt = document.createElement('option'); opt.value = loc.id; opt.textContent = loc.name; sel.appendChild(opt);
+    });
+    sel.value = keep;
+  });
+}
+
+/* ---------- 記録フォーム ---------- */
+const todayStr = new Date().toISOString().slice(0,10);
+document.getElementById('f-date').value = todayStr;
+document.getElementById('f-time').value = new Date().toTimeString().slice(0,5);
+
+function updateTideAuto(){
+  const dateVal = document.getElementById('f-date').value;
+  if(!dateVal) return;
+  const d = new Date(dateVal+'T12:00:00');
+  document.getElementById('tideAuto').innerHTML = `<span class="tideBadge"><span class="moon"></span>潮回り（自動算出）: ${tideName(d)}</span>`;
+}
+document.getElementById('f-date').addEventListener('change', updateTideAuto);
+updateTideAuto();
+
+document.getElementById('f-bouzu').addEventListener('change', e=>{
+  const dis = e.target.checked;
+  document.getElementById('f-count').disabled = dis;
+  document.getElementById('f-size').disabled = dis;
+  if(dis){ document.getElementById('f-count').value=0; document.getElementById('f-size').value=''; }
+});
+
+let editingId = null;
+function resetForm(){
+  editingId = null;
+  document.getElementById('f-date').value = todayStr;
+  document.getElementById('f-time').value = new Date().toTimeString().slice(0,5);
+  document.getElementById('f-location').value = '';
+  document.getElementById('f-bouzu').checked = false;
+  document.getElementById('f-count').disabled=false; document.getElementById('f-size').disabled=false;
+  ['f-count','f-size','f-airtemp','f-watertemp','f-rain','f-windforce','f-oxygen'].forEach(id=>document.getElementById(id).value='');
+  ['f-tidemove','f-weather','f-winddir'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-memo').value='';
+  document.getElementById('btnSaveRecord').textContent = '記録を保存';
+  document.getElementById('btnCancelEdit').style.display='none';
+  updateTideAuto();
+}
+
+document.getElementById('btnSaveRecord').addEventListener('click', async ()=>{
+  const date = document.getElementById('f-date').value;
+  if(!date){ alert('日付を入力してください'); return; }
+  const rec = {
+    id: editingId || crypto.randomUUID(),
+    date, time: document.getElementById('f-time').value,
+    locationId: document.getElementById('f-location').value,
+    bouzu: document.getElementById('f-bouzu').checked,
+    count: Number(document.getElementById('f-count').value)||0,
+    size: document.getElementById('f-size').value ? Number(document.getElementById('f-size').value) : null,
+    tide: tideName(new Date(date+'T12:00:00')),
+    tidemove: document.getElementById('f-tidemove').value,
+    weather: document.getElementById('f-weather').value,
+    airtemp: document.getElementById('f-airtemp').value ? Number(document.getElementById('f-airtemp').value): null,
+    watertemp: document.getElementById('f-watertemp').value ? Number(document.getElementById('f-watertemp').value): null,
+    rain: document.getElementById('f-rain').value ? Number(document.getElementById('f-rain').value): null,
+    winddir: document.getElementById('f-winddir').value,
+    windforce: document.getElementById('f-windforce').value ? Number(document.getElementById('f-windforce').value): null,
+    oxygen: document.getElementById('f-oxygen').value ? Number(document.getElementById('f-oxygen').value): null,
+    memo: document.getElementById('f-memo').value
+  };
+  if(editingId){ records = records.map(r=> r.id===editingId ? rec : r); } else { records.push(rec); }
+  await saveAll('records', records);
+  resetForm();
+  renderRecordList(); renderMapMarkers(); renderAnalysis(); renderCross();
+  goToTab('map');
+});
+document.getElementById('btnCancelEdit').addEventListener('click', resetForm);
+
+/* ---------- 最近の釣行リスト ---------- */
+document.getElementById('filterLocation').addEventListener('change', renderRecordList);
+function locName(id){ const l = locations.find(x=>x.id===id); return l ? l.name : '（場所未設定）'; }
+
+function renderRecordList(){
+  const wrap = document.getElementById('recordList');
+  const fLoc = document.getElementById('filterLocation').value;
+  let list = [...records].sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+  if(fLoc) list = list.filter(r=>r.locationId===fLoc);
+  list = list.slice(0,30);
+  wrap.innerHTML='';
+  if(list.length===0){ wrap.innerHTML='<div class="empty">記録がありません</div>'; return; }
+  list.forEach(r=>{
+    const div = document.createElement('div');
+    div.className='recordItem';
+    div.innerHTML = `
+      <div>
+        <div><strong>${r.date}</strong> ${r.time||''} — ${locName(r.locationId)}</div>
+        <div class="meta">
+          <span class="pill ${r.bouzu?'bouzu':'catch'}">${r.bouzu?'ボウズ':(r.count+'尾'+(r.size?' / '+r.size+'cm':''))}</span>
+          <span class="pill" style="background:rgba(176,134,80,0.18); color:var(--bronze-bright);">${r.tide}${r.tidemove? ' ・'+r.tidemove:''}</span>
+        </div>
+      </div>
+      <button class="iconbtn" data-id="${r.id}">詳細</button>`;
+    div.querySelector('button').addEventListener('click', ()=>openDetail(r.id));
+    wrap.appendChild(div);
+  });
+}
+
+/* ---------- 詳細ダイアログ ---------- */
+const dialog = document.getElementById('detailDialog');
+let detailId = null;
+function openDetail(id){
+  detailId = id;
+  const r = records.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('detailBody').innerHTML = `
+    <h3 style="margin-top:0;">${r.date} ${r.time||''}</h3>
+    <div class="hint" style="font-size:13px; color:var(--ink);">
+      場所: ${locName(r.locationId)}<br>
+      釣果: ${r.bouzu?'ボウズ':(r.count+'尾'+(r.size?' / 最大'+r.size+'cm':''))}<br>
+      潮回り: ${r.tide}　潮の動き: ${r.tidemove||'-'}<br>
+      天気: ${r.weather||'-'}　気温: ${r.airtemp??'-'}℃　水温: ${r.watertemp??'-'}℃<br>
+      降水量: ${r.rain??'-'}mm　風: ${r.winddir||'-'} ${r.windforce??'-'}m/s<br>
+      溶存酸素: ${r.oxygen??'-'}mg/L<br>
+      メモ: ${r.memo? r.memo.replace(/</g,'&lt;') : '-'}
+    </div>`;
+  dialog.showModal();
+}
+document.getElementById('detailClose').addEventListener('click', ()=>dialog.close());
+document.getElementById('detailDelete').addEventListener('click', async ()=>{
+  if(!confirm('この記録を削除しますか？')) return;
+  records = records.filter(r=>r.id!==detailId);
+  await saveAll('records', records);
+  dialog.close();
+  renderRecordList(); renderMapMarkers(); renderAnalysis(); renderCross();
+});
+document.getElementById('detailEdit').addEventListener('click', ()=>{
+  const r = records.find(x=>x.id===detailId);
+  if(!r) return;
+  editingId = r.id;
+  document.getElementById('f-date').value = r.date;
+  document.getElementById('f-time').value = r.time||'';
+  document.getElementById('f-location').value = r.locationId||'';
+  document.getElementById('f-bouzu').checked = r.bouzu;
+  document.getElementById('f-count').disabled = r.bouzu; document.getElementById('f-size').disabled = r.bouzu;
+  document.getElementById('f-count').value = r.count||'';
+  document.getElementById('f-size').value = r.size??'';
+  document.getElementById('f-tidemove').value = r.tidemove||'';
+  document.getElementById('f-weather').value = r.weather||'';
+  document.getElementById('f-airtemp').value = r.airtemp??'';
+  document.getElementById('f-watertemp').value = r.watertemp??'';
+  document.getElementById('f-rain').value = r.rain??'';
+  document.getElementById('f-winddir').value = r.winddir||'';
+  document.getElementById('f-windforce').value = r.windforce??'';
+  document.getElementById('f-oxygen').value = r.oxygen??'';
+  document.getElementById('f-memo').value = r.memo||'';
+  document.getElementById('btnSaveRecord').textContent = '記録を更新';
+  document.getElementById('btnCancelEdit').style.display='inline-block';
+  updateTideAuto();
+  dialog.close();
+  goToTab('record');
+});
+
+/* ---------- 分析 ---------- */
+function bucketOf(r, axis){
+  switch(axis){
+    case 'tide': return r.tide || '不明';
+    case 'tidemove': return r.tidemove || '未記録';
+    case 'location': return locName(r.locationId);
+    case 'winddir': return r.winddir || '未記録';
+    case 'weather': return r.weather || '未記録';
+    case 'hour': {
+      if(!r.time) return '未記録';
+      const h = Number(r.time.split(':')[0]);
+      if(h<6) return '未明(0-6時)'; if(h<10) return '朝(6-10時)'; if(h<14) return '昼(10-14時)';
+      if(h<18) return '夕方(14-18時)'; return '夜(18-24時)';
+    }
+    case 'watertemp': {
+      if(r.watertemp==null) return '未記録'; const t = r.watertemp;
+      if(t<10) return '10℃未満'; if(t<15) return '10-15℃'; if(t<20) return '15-20℃'; if(t<25) return '20-25℃'; return '25℃以上';
+    }
+    case 'rain': {
+      if(r.rain==null) return '未記録'; if(r.rain===0) return '0mm'; if(r.rain<5) return '0-5mm'; if(r.rain<20) return '5-20mm'; return '20mm以上';
+    }
+    default: return '不明';
+  }
+}
+document.getElementById('analysisAxis').addEventListener('change', renderAnalysis);
+function renderAnalysis(){
+  const axis = document.getElementById('analysisAxis').value;
+  const groups = {};
+  records.forEach(r=>{
+    const key = bucketOf(r, axis);
+    if(!groups[key]) groups[key] = {total:0, catch:0, sizeSum:0, sizeN:0};
+    groups[key].total++;
+    if(!r.bouzu){ groups[key].catch += r.count||0; }
+    if(r.size){ groups[key].sizeSum += r.size; groups[key].sizeN++; }
+  });
+  const wrap = document.getElementById('analysisResult');
+  const keys = Object.keys(groups);
+  if(keys.length===0){ wrap.innerHTML='<div class="empty">記録がまだありません</div>'; return; }
+  const maxCatch = Math.max(...keys.map(k=>groups[k].catch), 1);
+  wrap.innerHTML = keys.sort((a,b)=>groups[b].catch-groups[a].catch).map(k=>{
+    const g = groups[k]; const avgSize = g.sizeN? (g.sizeSum/g.sizeN).toFixed(1) : '-';
+    return `<div class="barRow">
+      <div class="lbl"><span>${k}（釣行${g.total}回）</span><span>${g.catch}尾 / 平均${avgSize}cm</span></div>
+      <div class="barTrack"><div class="barFill" style="width:${(g.catch/maxCatch*100)}%"></div></div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('crossAxis1').addEventListener('change', renderCross);
+document.getElementById('crossAxis2').addEventListener('change', renderCross);
+function renderCross(){
+  const a1 = document.getElementById('crossAxis1').value, a2 = document.getElementById('crossAxis2').value;
+  if(records.length===0){ document.getElementById('crossResult').innerHTML='<div class="empty">記録がまだありません</div>'; return; }
+  const rows = [...new Set(records.map(r=>bucketOf(r,a1)))];
+  const cols = [...new Set(records.map(r=>bucketOf(r,a2)))];
+  const table = {};
+  rows.forEach(r=>{ table[r]={}; cols.forEach(c=>table[r][c]=0); });
+  records.forEach(r=>{
+    const k1 = bucketOf(r,a1), k2 = bucketOf(r,a2);
+    if(!table[k1]) table[k1]={};
+    table[k1][k2] = (table[k1][k2]||0) + (r.bouzu?0:(r.count||0));
+  });
+  let html = '<table class="cross"><tr><th>-</th>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr>';
+  rows.forEach(r=>{ html += `<tr><th>${r}</th>` + cols.map(c=>`<td>${table[r][c]||0}</td>`).join('') + '</tr>'; });
+  html += '</table><div class="hint">セルの数値は釣果尾数の合計です（ボウズは0でカウント）。</div>';
+  document.getElementById('crossResult').innerHTML = html;
+}
+
+/* ---------- 初期化 ---------- */
+(async function init(){
+  if(hasRemoteStorage()){
+    document.getElementById('previewBanner').style.display = 'block';
+  }
+  locations = await loadAll('locations');
+  records = await loadAll('records');
+  populateLocationSelects();
+  renderMapMarkers();
+  renderRecordList();
+  renderAnalysis();
+  renderCross();
+  setTimeout(()=>map.invalidateSize(), 100);
+})();
+</script>
+</body>
+</html>
