@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今年の釣果 魚種の移り変わり</title>
+<style>
+  :root{ --bg:#0c2430; --ink:#ede6d6; --dim:#9fb3b9; --line:rgba(237,230,214,.12);
+         --c1:#d1a469; --c2:#3e9c8c; --c3:#d9694a; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#050f14;color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh}
+  /* 9:16 の縦長ステージ。画面収録してそのままショートに使える */
+  #stage{position:relative;aspect-ratio:9/16;height:min(100vh,calc(100vw*16/9));
+         background:radial-gradient(120% 70% at 80% -10%,#123544,var(--bg) 60%);overflow:hidden;container-type:size}
+  h1{position:absolute;top:5cqh;left:0;right:0;margin:0;text-align:center;font:700 5.6cqw "Yu Mincho","Noto Serif JP",serif;line-height:1.35}
+  h1 small{display:block;font:400 3cqw sans-serif;color:var(--dim);margin-top:.8cqh}
+  svg{position:absolute;inset:0;width:100%;height:100%}
+  #now{position:absolute;left:0;right:0;bottom:6cqh;text-align:center}
+  #now .lab{font-size:3.2cqw;color:var(--dim)}
+  #now .big{font:700 11cqw "Yu Mincho","Noto Serif JP",serif;transition:color .3s;min-height:1.2em}
+  #hint{position:absolute;bottom:1.5cqh;width:100%;text-align:center;font-size:2.4cqw;color:var(--dim);opacity:.6}
+  #dummy{position:absolute;top:1.2cqh;right:2cqw;font-size:2.2cqw;color:var(--c3)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <h1>今年釣れた魚<small id="sub"></small></h1>
+  <div id="dummy">※ダミーデータ</div>
+  <svg id="chart" viewBox="0 0 1080 1920"></svg>
+  <div id="now"><div class="lab">この時期いちばん釣れてる魚</div><div class="big" id="leader">—</div></div>
+  <div id="hint">タップでもう一度再生</div>
+</div>
+
+<script>
+/* ===== ここを実データに差し替える =====
+   1行 = 1釣行ぶんの釣果 { date:'YYYY-MM-DD', species:'魚種', count:尾数 } */
+const LOGS = (()=>{
+  // ダミー生成: 季節で主役が入れ替わる設定（実データ投入時はこの関数ごと置換）
+  let s=7; const rnd=()=> (s=(s*16807)%2147483647)/2147483647;
+  const peak={クロダイ:[135,70],シーバス:[230,50],ハゼ:[285,35],キビレ:[200,45]}; // [ピーク日(通算), 幅]
+  const out=[];
+  for(let d=15; d<=325; d++){
+    if(rnd()>0.28) continue;                       // 釣行日
+    const date=new Date(Date.UTC(2026,0,1)+ (d-1)*864e5).toISOString().slice(0,10);
+    for(const [sp,[p,w]] of Object.entries(peak)){
+      const n=Math.round(7*Math.exp(-((d-p)**2)/(2*w*w))*rnd()*1.6);
+      if(n>0) out.push({date,species:sp,count:n});
+    }
+  }
+  return out;
+})();
+const TOP_N = 3;         // 比べる魚種数
+const BIN_DAYS = 21;     // 集計単位（日）
+/* ===================================== */
+
+const NS='http://www.w3.org/2000/svg', svg=document.getElementById('chart');
+const colors=['var(--c1)','var(--c2)','var(--c3)'];
+const day=s=>Math.floor(Date.parse(s)/864e5);
+const y0=day(LOGS.reduce((a,l)=>l.date<a?l.date:a,'9999'));
+const y1=day(LOGS.reduce((a,l)=>l.date>a?l.date:a,'0000'));
+const year=LOGS[0].date.slice(0,4), jan1=day(year+'-01-01');
+
+// 魚種ごとの合計 → 上位N種
+const tot={}; LOGS.forEach(l=>tot[l.species]=(tot[l.species]||0)+l.count);
+const species3=Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,TOP_N).map(e=>e[0]);
+document.getElementById('sub').textContent=`${year}年 上位${TOP_N}種の釣果を時系列で比較`;
+
+// 期間ビン集計
+const nb=Math.ceil((y1-y0+1)/BIN_DAYS);
+const bins=species3.map(()=>Array(nb).fill(0));
+LOGS.forEach(l=>{const k=species3.indexOf(l.species); if(k>=0) bins[k][Math.floor((day(l.date)-y0)/BIN_DAYS)]+=l.count;});
+const maxV=Math.max(...bins.flat());
+
+// レイアウト
+const L=290,R=1040,T=360,laneH=330,W=R-L;
+const xOf=i=>L+(i+.5)/nb*W;
+const el=(n,a,p=svg)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e;};
+
+// 月ガイド
+for(let m=0;m<12;m++){
+  const d=day(`${year}-${String(m+1).padStart(2,'0')}-01`); if(d<y0-5||d>y1+5) continue;
+  const x=L+(d-y0)/(nb*BIN_DAYS)*W;
+  el('line',{x1:x,x2:x,y1:T-30,y2:T+laneH*TOP_N,stroke:'rgba(237,230,214,.12)'});
+  el('text',{x:x+6,y:T+laneH*TOP_N+50,fill:'#9fb3b9','font-size':34}).textContent=(m+1)+'月';
+}
+// レーン（縦軸=魚）
+species3.forEach((sp,k)=>{
+  const cy=T+laneH*k+laneH/2;
+  el('line',{x1:L,x2:R,y1:cy,y2:cy,stroke:'rgba(237,230,214,.12)'});
+  const t=el('text',{x:L-24,y:cy+18,fill:'#ede6d6','font-size':50,'font-weight':700,'text-anchor':'end'});
+  t.textContent=sp;
+});
+// バブル（面積=尾数）
+const bubbles=[];
+species3.forEach((sp,k)=>{
+  const cy=T+laneH*k+laneH/2;
+  bins[k].forEach((v,i)=>{
+    if(!v) return;
+    const r=Math.sqrt(v/maxV)*laneH*0.2;
+    const c=el('circle',{cx:xOf(i),cy,r:0,fill:colors[k],'fill-opacity':.85,stroke:'#0c2430','stroke-width':3});
+    bubbles.push({c,r,i,k});
+  });
+});
+const head=el('line',{y1:T-30,y2:T+laneH*TOP_N,stroke:'#ede6d6','stroke-width':3,opacity:.0});
+
+// 再生
+const leader=document.getElementById('leader');
+let raf,t0;
+function play(){
+  cancelAnimationFrame(raf); bubbles.forEach(b=>b.c.setAttribute('r',0)); leader.textContent='—';
+  const dur=9000; t0=performance.now(); head.setAttribute('opacity',.6);
+  const step=now=>{
+    const p=Math.min(1,(now-t0)/dur), pos=p*nb;
+    head.setAttribute('x1',L+p*W); head.setAttribute('x2',L+p*W);
+    bubbles.forEach(b=>{ const g=Math.max(0,Math.min(1,(pos-b.i)*1.6)); b.c.setAttribute('r',b.r*(1-Math.pow(1-g,3))); });
+    const i=Math.min(nb-1,Math.floor(pos));
+    let best=0; species3.forEach((_,k)=>{if(bins[k][i]>bins[best][i])best=k;});
+    if(bins[best][i]>0){leader.textContent=species3[best];leader.style.color=getComputedStyle(document.documentElement).getPropertyValue('--c'+(best+1));}
+    if(p<1) raf=requestAnimationFrame(step); else head.setAttribute('opacity',0);
+  };
+  raf=requestAnimationFrame(step);
+}
+document.getElementById('stage').addEventListener('click',play);
+play();
+</script>
+</body>
+</html>
